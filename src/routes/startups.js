@@ -8,4 +8,9 @@ router.get('/:id', controller.getStartupById);
 router.put('/:id', controller.updateStartup);
 router.delete('/:id', controller.deleteStartup);
 
+// Document Routes
+router.post('/:id/documents', controller.addFinancialDocument);
+router.delete('/:id/documents/:docId', controller.deleteFinancialDocument);
+
+
 module.exports = router;

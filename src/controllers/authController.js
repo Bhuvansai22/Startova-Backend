@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const User = require('../models/User');
-const Intern = require('../models/Intern');
+// const Intern = require('../models/Intern'); // Removed
 const Startup = require('../models/Startup');
 const Investor = require('../models/Investor');
 
@@ -33,29 +33,23 @@ exports.signup = async (req, res) => {
             });
         }
 
+        // Validate role - Must be startup or investor now
+        if (!['startup', 'investor'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role. Must be startup or investor.' });
+        }
+
         // Create user
         const user = await User.create({
             username,
             email,
             password,
-            role: role || 'intern',
+            role: role
         });
 
         // Create role-specific document based on user role
         let roleDocument = null;
-        const userRole = role || 'intern';
 
-        switch (userRole) {
-            case 'intern':
-                roleDocument = await Intern.create({
-                    userId: user._id,
-                    name: username,
-                    email: email,
-                    skills: [],
-                    appliedStartups: []
-                });
-                break;
-
+        switch (role) {
             case 'startup':
                 roleDocument = await Startup.create({
                     userId: user._id,
@@ -80,14 +74,7 @@ exports.signup = async (req, res) => {
                 break;
 
             default:
-                // Default to intern if invalid role
-                roleDocument = await Intern.create({
-                    userId: user._id,
-                    name: username,
-                    email: email,
-                    skills: [],
-                    appliedStartups: []
-                });
+                throw new Error('Invalid role specified');
         }
 
         // Generate token
@@ -137,11 +124,22 @@ exports.login = async (req, res) => {
         // Generate token
         const token = generateToken(user._id);
 
+        // Fetch role specific document ID
+        let roleDocumentId = null;
+        if (user.role === 'startup') {
+            const startup = await Startup.findOne({ userId: user._id });
+            roleDocumentId = startup?._id;
+        } else if (user.role === 'investor') {
+            const investor = await Investor.findOne({ userId: user._id });
+            roleDocumentId = investor?._id;
+        }
+
         res.json({
             _id: user._id,
             username: user.username,
             email: user.email,
             role: user.role,
+            roleDocumentId,
             token,
         });
     } catch (error) {

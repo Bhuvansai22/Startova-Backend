@@ -40,11 +40,52 @@ exports.updateStartup = async (req, res) => {
   }
 };
 
+
 exports.deleteStartup = async (req, res) => {
   try {
     const deleted = await Startup.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: 'Startup not found' });
     res.json({ message: 'Deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Add Financial Document
+exports.addFinancialDocument = async (req, res) => {
+  try {
+    const { name, type, url } = req.body;
+    const startup = await Startup.findById(req.params.id);
+
+    if (!startup) {
+      return res.status(404).json({ error: 'Startup not found' });
+    }
+
+    startup.financialDocuments.push({ name, type, url });
+    await startup.save();
+
+    res.status(201).json(startup.financialDocuments);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Delete Financial Document
+exports.deleteFinancialDocument = async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+    const startup = await Startup.findById(id);
+
+    if (!startup) {
+      return res.status(404).json({ error: 'Startup not found' });
+    }
+
+    startup.financialDocuments = startup.financialDocuments.filter(
+      doc => doc._id.toString() !== docId
+    );
+
+    await startup.save();
+    res.json(startup.financialDocuments);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
