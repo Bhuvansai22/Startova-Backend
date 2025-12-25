@@ -26,7 +26,7 @@ const UserSchema = new Schema({
   },
   role: {
     type: String,
-    enum: ['startup', 'investor', 'intern', 'admin'],
+    enum: ['intern', 'admin'],
     default: 'intern',
   },
 }, { timestamps: true });
@@ -35,7 +35,7 @@ const UserSchema = new Schema({
 UserSchema.pre('save', async function (next) {
   // Only hash if password is modified or new
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);

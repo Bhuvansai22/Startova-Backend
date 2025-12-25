@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const User = require('../models/User');
-// const Intern = require('../models/Intern'); // Removed
+const User = require('../models/User'); // Still needed for Admin/Intern
 const Startup = require('../models/Startup');
 const Investor = require('../models/Investor');
 
@@ -12,7 +11,7 @@ const generateToken = (id) => {
     });
 };
 
-// @desc    Register a new user
+// @desc    Register a new user (Startup or Investor)
 // @route   POST /api/auth/signup
 // @access  Public
 exports.signup = async (req, res) => {
@@ -25,56 +24,49 @@ exports.signup = async (req, res) => {
     try {
         const { username, email, password, role } = req.body;
 
-        // Check if user already exists
-        const userExists = await User.findOne({ $or: [{ email }, { username }] });
-        if (userExists) {
-            return res.status(400).json({
-                error: userExists.email === email ? 'Email already registered' : 'Username already taken'
-            });
-        }
-
-        // Validate role - Must be startup or investor now
+        // Validate role
         if (!['startup', 'investor'].includes(role)) {
             return res.status(400).json({ error: 'Invalid role. Must be startup or investor.' });
         }
 
-        // Create user
-        const user = await User.create({
-            username,
-            email,
-            password,
-            role: role
-        });
+        let user = null;
 
-        // Create role-specific document based on user role
-        let roleDocument = null;
-
-        switch (role) {
-            case 'startup':
-                roleDocument = await Startup.create({
-                    userId: user._id,
-                    founderName: username,
-                    startupName: username + "'s Startup", // Default, can be updated later
-                    description: '',
-                    domain: 'general',
-                    documents: [],
-                    internsRequired: false
+        if (role === 'startup') {
+            // Check if startup already exists
+            const startupExists = await Startup.findOne({ $or: [{ email }, { startupName: username }] });
+            if (startupExists) {
+                return res.status(400).json({
+                    error: startupExists.email === email ? 'Email already registered' : 'Startup name already taken'
                 });
-                break;
+            }
 
-            case 'investor':
-                roleDocument = await Investor.create({
-                    userId: user._id,
-                    name: username,
-                    email: email,
-                    investmentRange: '',
-                    preferredDomains: [],
-                    portfolio: []
-                });
-                break;
+            // Create Startup
+            user = await Startup.create({
+                email,
+                password,
+                founderName: username, // Using username as founder name initially
+                startupName: username + "'s Startup", // Default, user can update
+                description: '',
+                domain: 'general',
+                role: 'startup',
+                internsRequired: false
+            });
 
-            default:
-                throw new Error('Invalid role specified');
+        } else if (role === 'investor') {
+            // Check if investor already exists
+            const investorExists = await Investor.findOne({ email });
+            if (investorExists) {
+                return res.status(400).json({ error: 'Email already registered' });
+            }
+
+            // Create Investor
+            user = await Investor.create({
+                email,
+                password,
+                name: username,
+                role: 'investor',
+                preferredDomains: []
+            });
         }
 
         // Generate token
@@ -82,10 +74,10 @@ exports.signup = async (req, res) => {
 
         res.status(201).json({
             _id: user._id,
-            username: user.username,
+            username: user.startupName || user.name,
             email: user.email,
             role: user.role,
-            roleDocumentId: roleDocument._id,
+            roleDocumentId: user._id, // It IS the document now
             token,
         });
     } catch (error) {
@@ -106,9 +98,26 @@ exports.login = async (req, res) => {
 
     try {
         const { email, password } = req.body;
+        let user = null;
+        let role = null;
 
-        // Find user by email (include password field)
-        const user = await User.findOne({ email }).select('+password');
+        // 1. Check Startup Collection
+        user = await Startup.findOne({ email }).select('+password');
+        if (user) {
+            role = 'startup';
+        }
+
+        // 2. Check Investor Collection (if not found)
+        if (!user) {
+            user = await Investor.findOne({ email }).select('+password');
+            if (user) role = 'investor';
+        }
+
+        // 3. Check User Collection (Admin/Intern fallback)
+        if (!user) {
+            user = await User.findOne({ email }).select('+password');
+            if (user) role = user.role;
+        }
 
         if (!user) {
             return res.status(401).json({ error: 'Invalid email or password' });
@@ -124,22 +133,12 @@ exports.login = async (req, res) => {
         // Generate token
         const token = generateToken(user._id);
 
-        // Fetch role specific document ID
-        let roleDocumentId = null;
-        if (user.role === 'startup') {
-            const startup = await Startup.findOne({ userId: user._id });
-            roleDocumentId = startup?._id;
-        } else if (user.role === 'investor') {
-            const investor = await Investor.findOne({ userId: user._id });
-            roleDocumentId = investor?._id;
-        }
-
         res.json({
             _id: user._id,
-            username: user.username,
+            username: user.startupName || user.name || user.username,
             email: user.email,
-            role: user.role,
-            roleDocumentId,
+            role: role,
+            roleDocumentId: user._id,
             token,
         });
     } catch (error) {
@@ -153,20 +152,34 @@ exports.login = async (req, res) => {
 // @access  Private
 exports.getProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id);
+        // req.user is already populated by auth middleware
+        const user = req.user;
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json({
+        // Construct standardized response
+        const responseUser = {
             _id: user._id,
-            username: user.username,
             email: user.email,
             role: user.role,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
-        });
+        };
+
+        if (user.role === 'startup') {
+            responseUser.username = user.startupName;
+            responseUser.founderName = user.founderName;
+            // Add other startup specific fields if needed
+        } else if (user.role === 'investor') {
+            responseUser.username = user.name;
+            // Add other investor specific fields if needed
+        } else {
+            responseUser.username = user.username;
+        }
+
+        res.json(responseUser);
     } catch (error) {
         console.error('Get profile error:', error);
         res.status(500).json({ error: error.message });

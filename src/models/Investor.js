@@ -1,23 +1,24 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const { Schema } = mongoose;
 
-const InvestmentSubSchema = new Schema({
-  startupId: { type: Schema.Types.ObjectId, ref: 'Startup', required: true },
-  startupName: { type: String },
-  amount: { type: Number, required: true },
-  currency: { type: String, default: 'INR' },
-  equity: { type: Number }, // percentage (optional)
-  investmentDate: { type: Date, default: Date.now },
-  status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'completed' },
-  notes: { type: String }
-}, { _id: true });
-
 const InvestorSchema = new Schema({
-  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  // Auth Fields
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: {
+    type: String,
+    required: [true, 'Password is required'],
+    minlength: [8, 'Password must be at least 8 characters'],
+    select: false
+  },
+  role: {
+    type: String,
+    enum: ['investor'],
+    default: 'investor'
+  },
 
   // Personal Details
   name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   phone: { type: String, trim: true },
   location: { type: String, trim: true },
   bio: { type: String, maxlength: 500 },
@@ -28,30 +29,27 @@ const InvestorSchema = new Schema({
   linkedinUrl: { type: String, trim: true },
 
   // Investment Preferences
-  investmentRange: { type: String }, // e.g., "₹10L - ₹50L"
-  minInvestment: { type: Number, default: 100000 }, // in INR
-  maxInvestment: { type: Number, default: 10000000 }, // in INR
   preferredDomains: [{ type: String, lowercase: true }],
-  preferredStages: [{ type: String, enum: ['seed', 'series-a', 'series-b', 'growth'], lowercase: true }],
-
-  // Investment Tracking
-  totalInvested: { type: Number, default: 0 }, // Total amount invested across all startups
-  availableBalance: { type: Number, default: 5000000 }, // Available to invest (₹50L default)
-  portfolio: [InvestmentSubSchema],
 
 }, { timestamps: true });
 
-// Method to add investment
-InvestorSchema.methods.addInvestment = async function (investmentData) {
-  this.portfolio.push(investmentData);
-  this.totalInvested += investmentData.amount;
-  this.availableBalance -= investmentData.amount;
-  return await this.save();
-};
+// Hash password before saving
+InvestorSchema.pre('save', async function (next) {
+  // Only hash if password is modified or new
+  if (!this.isModified('password')) return next();
 
-// Method to check if can invest
-InvestorSchema.methods.canInvest = function (amount) {
-  return this.availableBalance >= amount && amount >= this.minInvestment && amount <= this.maxInvestment;
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Method to compare passwords
+InvestorSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
 };
 
 module.exports = mongoose.model('Investor', InvestorSchema);

@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Startup = require('../models/Startup');
+const Investor = require('../models/Investor');
 
 const protect = async (req, res, next) => {
     let token;
@@ -13,8 +15,22 @@ const protect = async (req, res, next) => {
             // Verify token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            // Get user from token (excluding password)
-            req.user = await User.findById(decoded.id).select('-password');
+            // Try to find user in all collections
+            // 1. Check Startup
+            let user = await Startup.findById(decoded.id).select('-password');
+
+            // 2. Check Investor
+            if (!user) {
+                user = await Investor.findById(decoded.id).select('-password');
+            }
+
+            // 3. Check generic User (Admin/Intern)
+            if (!user) {
+                user = await User.findById(decoded.id).select('-password');
+            }
+
+            // Assign user to req.user
+            req.user = user;
 
             if (!req.user) {
                 return res.status(401).json({ error: 'User not found' });
