@@ -5,7 +5,7 @@ const path = require('path');
 const express = require('express');
 
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/internship';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/mern_app';
 
 (async () => {
   try {
