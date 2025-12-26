@@ -150,15 +150,23 @@ const getStartupFunding = async (req, res) => {
 // @access  Private
 const updateInvestorProfile = async (req, res) => {
     try {
-        const { phone, location, bio, company, designation, linkedinUrl, investmentRange, minInvestment, maxInvestment, preferredDomains } = req.body;
+        const { name, phone, location, bio, company, designation, linkedinUrl, investmentRange, minInvestment, maxInvestment, preferredDomains } = req.body;
 
-        const investor = await Investor.findById(req.params.investorId);
+        let investorId = req.params.investorId;
+
+        // Validation: Ensure investor can only update their own profile
+        if (req.user.role === 'investor' && req.user._id.toString() !== investorId) {
+            return res.status(403).json({ error: 'Not authorized to update this profile' });
+        }
+
+        const investor = await Investor.findById(investorId);
 
         if (!investor) {
             return res.status(404).json({ error: 'Investor not found' });
         }
 
         // Update fields
+        if (name !== undefined) investor.name = name;
         if (phone !== undefined) investor.phone = phone;
         if (location !== undefined) investor.location = location;
         if (bio !== undefined) investor.bio = bio;

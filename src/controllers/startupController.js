@@ -32,7 +32,14 @@ exports.getStartupById = async (req, res) => {
 
 exports.updateStartup = async (req, res) => {
   try {
-    const updated = await Startup.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    let id = req.params.id;
+
+    // validaton: Ensure startup can only update their own profile
+    if (req.user.role === 'startup' && req.user._id.toString() !== id) {
+      return res.status(403).json({ error: 'Not authorized to update this profile' });
+    }
+
+    const updated = await Startup.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
     if (!updated) return res.status(404).json({ error: 'Startup not found' });
     res.json(updated);
   } catch (err) {
