@@ -10,6 +10,7 @@ const messagesRouter = require('./routes/messages');
 const investmentsRouter = require('./routes/investments');
 const uploadRouter = require('./routes/upload');
 const path = require('path');
+const morgan = require('morgan');
 
 const { notFound, errorHandler } = require('./middleware/errorHandlers');
 
@@ -18,6 +19,7 @@ const createApp = () => {
 
   app.use(cors());
   app.use(express.json());
+  app.use(morgan('dev')); // Log requests
 
   app.use('/api/auth', authRouter);
   app.use('/api/startups', startupsRouter);
