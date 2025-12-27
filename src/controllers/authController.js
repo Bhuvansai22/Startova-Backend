@@ -11,7 +11,6 @@ const generateToken = (id) => {
     });
 };
 
-// @desc    Register a new user (Startup or Investor)
 // @route   POST /api/auth/signup
 // @access  Public
 exports.signup = async (req, res) => {
@@ -44,8 +43,8 @@ exports.signup = async (req, res) => {
             user = await Startup.create({
                 email,
                 password,
-                founderName: username, // Using username as founder name initially
-                startupName: username + "'s Startup", // Default, user can update
+                founderName: username,
+                startupName: username + "'s Startup", 
                 description: '',
                 domain: 'general',
                 role: 'startup',
@@ -77,7 +76,7 @@ exports.signup = async (req, res) => {
             username: user.startupName || user.name,
             email: user.email,
             role: user.role,
-            roleDocumentId: user._id, // It IS the document now
+            roleDocumentId: user._id,
             token,
         });
     } catch (error) {
@@ -86,7 +85,7 @@ exports.signup = async (req, res) => {
     }
 };
 
-// @desc    Authenticate user & get token
+
 // @route   POST /api/auth/login
 // @access  Public
 exports.login = async (req, res) => {
@@ -101,19 +100,18 @@ exports.login = async (req, res) => {
         let user = null;
         let role = null;
 
-        // 1. Check Startup Collection
+    
         user = await Startup.findOne({ email }).select('+password');
         if (user) {
             role = 'startup';
         }
 
-        // 2. Check Investor Collection (if not found)
+     
         if (!user) {
             user = await Investor.findOne({ email }).select('+password');
             if (user) role = 'investor';
         }
 
-        // 3. Check User Collection (Admin/Intern fallback)
         if (!user) {
             user = await User.findOne({ email }).select('+password');
             if (user) role = user.role;
@@ -147,19 +145,18 @@ exports.login = async (req, res) => {
     }
 };
 
-// @desc    Get current user profile
+
 // @route   GET /api/auth/profile
 // @access  Private
 exports.getProfile = async (req, res) => {
     try {
-        // req.user is already populated by auth middleware
+    
         const user = req.user;
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Construct standardized response
         const responseUser = {
             _id: user._id,
             email: user.email,
@@ -171,10 +168,10 @@ exports.getProfile = async (req, res) => {
         if (user.role === 'startup') {
             responseUser.username = user.startupName;
             responseUser.founderName = user.founderName;
-            // Add other startup specific fields if needed
+           
         } else if (user.role === 'investor') {
             responseUser.username = user.name;
-            // Add other investor specific fields if needed
+        
         } else {
             responseUser.username = user.username;
         }
